@@ -47,11 +47,15 @@ def transform(raw, city):
     df["observed_at"] = pd.to_datetime(df["observed_at"], utc=True)
     df.insert(0, "city", city)
 
+    # Force the measurement columns to numbers: a column of only nulls would otherwise
+    # stay as text-like "None" values and crash the range checks below.
+    measures = ["temperature_c", "precipitation_mm", "wind_speed_kmh"]
+    df[measures] = df[measures].apply(pd.to_numeric, errors="coerce")
+
     # Keep only hours that have already happened (the API also returns forecasts).
     df = df[df["observed_at"] <= pd.Timestamp.now(tz="UTC")]
 
     # Quality checks: drop empty rows, then reject impossible values.
-    measures = ["temperature_c", "precipitation_mm", "wind_speed_kmh"]
     df = df.dropna(subset=measures, how="all")
     bad = (
         (df["temperature_c"] < -60) | (df["temperature_c"] > 60)
