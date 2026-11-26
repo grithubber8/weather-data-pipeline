@@ -17,15 +17,15 @@ An ETL pipeline that pulls hourly weather data for **Nantes** and **Casablanca**
 
 ```mermaid
 flowchart LR
-    API\\\[Open-Meteo API] -->|JSON: 7 past days, hourly| E
+    API\\\\\\\[Open-Meteo API] -->|JSON: 7 past days, hourly| E
 
-    subgraph P\\\[pipeline container]
-        E\\\[extract] --> T\\\[transform<br/>UTC, quality checks]
-        T --> L\\\[load<br/>upsert]
+    subgraph P\\\\\\\[pipeline container]
+        E\\\\\\\[extract] --> T\\\\\\\[transform<br/>UTC, quality checks]
+        T --> L\\\\\\\[load<br/>upsert]
     end
 
-    L -->|INSERT ... ON CONFLICT| DB\\\[(PostgreSQL 16<br/>weather\\\_hourly)]
-    ENV\\\[.env credentials] -.-> P
+    L -->|INSERT ... ON CONFLICT| DB\\\\\\\[(PostgreSQL 16<br/>weather\\\\\\\_hourly)]
+    ENV\\\\\\\[.env credentials] -.-> P
     ENV -.-> DB
 ```
 
@@ -33,7 +33,7 @@ flowchart LR
 |-|-|
 |**Extract**|Calls the API with a 30-second timeout and fails loudly on any HTTP error|
 |**Transform**|Renames columns to match the table (units in the names), converts times to timezone-aware UTC, drops forecast hours, drops rows with no measurements, rejects impossible values and logs a warning|
-|**Load**|Upserts rows in a single transaction: if `(city, observed\\\_at)` already exists, it is updated, not duplicated|
+|**Load**|Upserts rows in a single transaction: if `(city, observed\\\\\\\_at)` already exists, it is updated, not duplicated|
 
 ## Quick start
 
@@ -52,7 +52,7 @@ docker compose run --rm pipeline      # run the pipeline once
 Look at the data:
 
 ```bash
-docker compose exec db psql -U pipeline -d weather -c "SELECT city, count(\\\*), max(observed\\\_at) FROM weather\\\_hourly GROUP BY city;"
+docker compose exec db psql -U pipeline -d weather -c "SELECT city, count(\\\\\\\*), max(observed\\\\\\\_at) FROM weather\\\\\\\_hourly GROUP BY city;"
 ```
 
 Run the tests locally (Python 3.15 was used for development):
@@ -68,19 +68,19 @@ pytest
 
 |Decision|Reason|
 |-|-|
-|`PRIMARY KEY (city, observed\\\_at)` plus `ON CONFLICT DO UPDATE`|Makes every run **idempotent**: running the pipeline twice gives the same table as running it once|
+|`PRIMARY KEY (city, observed\\\\\\\_at)` plus `ON CONFLICT DO UPDATE`|Makes every run **idempotent**: running the pipeline twice gives the same table as running it once|
 |Timestamps stored as `TIMESTAMPTZ` in **UTC**|UTC has no daylight saving, so an hour can never appear twice or vanish (see the time zone demo below)|
-|Units in column names (`temperature\\\_c`, `wind\\\_speed\\\_kmh`)|Nobody has to guess units later|
+|Units in column names (`temperature\\\\\\\_c`, `wind\\\\\\\_speed\\\\\\\_kmh`)|Nobody has to guess units later|
 |Load inside one transaction (`with connection:`)|A failure halfway through rolls everything back, so the table never holds half a run|
 |Credentials in `.env`, never in code or in the image|`.env` is git-ignored and `.dockerignore`d; `.env.example` documents the settings|
-|Health check on the database + `depends\\\_on: service\\\_healthy`|The pipeline starts only when PostgreSQL accepts connections|
+|Health check on the database + `depends\\\\\\\_on: service\\\\\\\_healthy`|The pipeline starts only when PostgreSQL accepts connections|
 |Pipeline defined as a `jobs` profile|It is a job that runs and exits, not a server that stays on|
 |Database volume (`pgdata`)|Data survives container removal; `docker compose down -v` is the only thing that deletes it|
 |Transform logic kept in a pure function|It can be unit-tested without a database or internet access|
 
 ## Data quality and tests
 
-The transform step drops forecast hours (the table is named `observed\\\_at`), drops rows where every measurement is missing, keeps rows with partially missing values as `NULL`, and rejects physically impossible values (temperature outside -60 to 60 °C, negative rain or wind) with a logged warning instead of silently discarding them.
+The transform step drops forecast hours (the table is named `observed\\\\\\\_at`), drops rows where every measurement is missing, keeps rows with partially missing values as `NULL`, and rejects physically impossible values (temperature outside -60 to 60 °C, negative rain or wind) with a logged warning instead of silently discarding them.
 
 `pytest` runs 9 unit tests with no database and no network. Writing them caught a real bug: a column consisting only of nulls was stored as text-like `None` values and crashed the range check. Measurement columns are now forced to numeric types before validation.
 
@@ -93,7 +93,7 @@ The pipeline uses Python's `logging` module instead of `print`, so every line ca
 |Docker container (UTC)|`2026-11-22 17:00:44,961 INFO Nantes: extracted 336, loaded 186 rows`|
 |Laptop (Shenzhen, UTC+8)|`2026-11-23 01:11:37,503 INFO Nantes: extracted 336, loaded 186 rows`|
 
-The log labels differ by 8 hours, but the two runs were only 11 minutes apart (17:00 UTC and 17:11 UTC). Both wrote identical rows, because the stored `observed\\\_at` values are always UTC. Local-time labels are fine for reading logs. They must never be used as stored keys.
+The log labels differ by 8 hours, but the two runs were only 11 minutes apart (17:00 UTC and 17:11 UTC). Both wrote identical rows, because the stored `observed\\\\\\\_at` values are always UTC. Local-time labels are fine for reading logs. They must never be used as stored keys.
 
 [Container run in UTC next to a local run in UTC+8](https://github.com/grithubber8/weather-data-pipeline/blob/c31103dcaaf7ab83ee64ad8a4309b38476731aef/docs/time-zone-demo.png.png)
 
@@ -115,7 +115,7 @@ The log labels differ by 8 hours, but the two runs were only 11 minutes apart (1
 ```
 weather-data-pipeline/
 ├── pipeline.py              # extract, transform, load
-├── tests/test\\\_transform.py  # unit tests for the transform step
+├── tests/test\\\\\\\_transform.py  # unit tests for the transform step
 ├── sql/init.sql             # table definition, run on first database start
 ├── Dockerfile               # image for the pipeline job
 ├── docker-compose.yml       # PostgreSQL + the pipeline job
@@ -128,20 +128,22 @@ weather-data-pipeline/
 
 ## Limitations and next steps
 
-* **Modelled data, not station readings.** Open-Meteo returns model output, so `observed\\\\\\\_at` means "the model's value for that hour".
+* **Modelled data, not station readings.** Open-Meteo returns model output, so `observed\\\\\\\\\\\\\\\_at` means "the model's value for that hour".
 * **No incremental loading.** Each run re-fetches the last 7 days and upserts them. A watermark (load only what is newer) would be the next improvement.
 * **No scheduler, retries or alerting.** Runs are triggered by hand. Next: an orchestrator (Airflow or Dagster) with retries.
-* **No backups.** The database volume lives on the local disk. Production use would add scheduled `pg\\\\\\\_dump` backups.
+* **No backups.** The database volume lives on the local disk. Production use would add scheduled `pg\\\\\\\\\\\\\\\_dump` backups.
 * **No CI yet.** Next: a GitHub Actions workflow that runs the tests on every push.
-* **Next layers:** dbt models on top of `weather\\\\\\\_hourly`, data tests, and a cloud deployment.
+* **Next layers:** dbt models on top of `weather\\\\\\\\\\\\\\\_hourly`, data tests, and a cloud deployment.
 
 ```
 
-## Data source
+**Data source**
 
-Weather data by [Open-Meteo.com](https://open-meteo.com) (attribution required; check their terms of use before any commercial use).
 
-## Author
+Weather data by [\[Open-Meteo.com]](%28https://open-meteo.com%29) (attribution required; check their terms of use before any commercial use).
 
-Eunice Agogo · [LinkedIn](https://www.linkedin.com/in/eunice-agogo)
+**Author**
+
+*Eunice Agogo ·* [*Connect on LinkedIn!*](%28https://www.linkedin.com/in/eunice-agogo%29)
+
 
